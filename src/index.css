@@ -1,0 +1,167 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #0f1117;
+  color: #ffffff;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.header {
+  padding: 24px;
+  border-bottom: 1px solid #252936;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.header p {
+  margin: 5px 0 0;
+  color: #9da3b4;
+}
+
+.main {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.player {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #050609;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.video-player {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+  object-fit: contain;
+}
+
+.player-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #9da3b4;
+}
+
+.player-placeholder span {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.player-placeholder p {
+  margin: 0;
+}
+
+.channels {
+  margin-top: 32px;
+}
+
+.channels h2 {
+  margin: 0 0 18px;
+}
+
+.channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.empty {
+  padding: 30px;
+  border: 1px solid #252936;
+  border-radius: 12px;
+  color: #9da3b4;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .main {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 18px 16px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .player {
+    border-radius: 10px;
+  }
+
+  .channel-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.channel-card {
+  width: 100%;
+  background: #181b24;
+  border: 1px solid #252936;
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  overflow: hidden;
+  cursor: pointer;
+  color: #ffffff;
+  transition: 0.2s ease;
+}
+
+.channel-card:hover {
+  border-color: #3d4354;
+  transform: translateY(-2px);
+}
+
+.channel-card.selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px #ffffff;
+}
+
+.channel-card img {
+  width: 100%;
+  height: 100px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.channel-card h3 {
+  margin: 12px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffffff;
+}
+.video-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #000;
+}

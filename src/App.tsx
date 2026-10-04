@@ -1,5 +1,7 @@
+import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
+import Peliculas from "./pages/Peliculas";
 
 type Canal = {
   nombre: string;
@@ -7,7 +9,7 @@ type Canal = {
   link: string;
 };
 
-function App() {
+function Inicio() {
   const [canales, setCanales] = useState<Canal[]>([]);
   const [canalSeleccionado, setCanalSeleccionado] =
     useState<Canal | null>(null);
@@ -34,32 +36,38 @@ function App() {
   }, []);
 
   function seleccionarCanal(canal: Canal) {
-  setCanalSeleccionado(canal);
+    setCanalSeleccionado(canal);
 
-  setTimeout(() => {
-    document.getElementById("player")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, 50);
-}
+    setTimeout(() => {
+      document.getElementById("player")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
+  }
 
   return (
     <div className="app">
       <header className="header">
-        <h1>RexPlay</h1>
-        <p>TV en vivo</p>
+        <div>
+          <h1>RexPlay</h1>
+          <p>TV en vivo</p>
+        </div>
+
+        <Link to="/peliculas" className="movies-button">
+          🎬 Películas
+        </Link>
       </header>
 
       <main className="main">
         <section className="player" id="player">
           {canalSeleccionado ? (
             <iframe
-               src={canalSeleccionado.link}
-               className="video-iframe"
-               title={canalSeleccionado.nombre}
-               allow="autoplay; fullscreen; encrypted-media"
-               sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+              src={canalSeleccionado.link}
+              className="video-iframe"
+              title={canalSeleccionado.nombre}
+              allow="autoplay; fullscreen; encrypted-media"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
             />
           ) : (
             <div className="player-placeholder">
@@ -97,6 +105,17 @@ function App() {
         </section>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Inicio />} />
+        <Route path="/peliculas" element={<Peliculas />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

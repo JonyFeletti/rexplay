@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 
 type TipoContenido = "movie" | "tv";
 
+type PlayerSource = {
+  provider: string;
+  server: string;
+  embedUrl: string;
+};
+
 type TMDBItem = {
   id: number;
   title?: string;
@@ -75,6 +81,17 @@ function Peliculas() {
 
   const [mostrarReproductor, setMostrarReproductor] =
     useState(false);
+  const [reproductores, setReproductores] =
+    useState<PlayerSource[]>([]);
+
+  const [reproductorActual, setReproductorActual] =
+    useState(0);
+
+  const [cargandoReproductores, setCargandoReproductores] =
+    useState(false);
+
+  const [errorReproductores, setErrorReproductores] =
+    useState("");
 
   const [temporadas, setTemporadas] = useState<
     NonNullable<TMDBDetail["seasons"]>
@@ -108,7 +125,7 @@ function Peliculas() {
     const url = new URL(`${BASE_URL}${endpoint}`);
 
     url.searchParams.set("api_key", API_KEY);
-    url.searchParams.set("language", "es-AR");
+    url.searchParams.set("language", "es-MX");
 
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.set(key, value);
@@ -319,44 +336,107 @@ function Peliculas() {
       JSON.stringify(nuevaLista)
     );
   }
+  
+async function cargarReproductores(
+  type: TipoContenido,
+  tmdbId: number,
+  title: string,
+  year?: number,
+  season?: number,
+  episode?: number
+) {
+  setCargandoReproductores(true);
+  setErrorReproductores("");
+  setReproductores([]);
+  setReproductorActual(0);
 
-  async function abrirReproductor() {
-    if (!seleccionado) return;
+  try {
+    const response = await fetch("/api/reproductores", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        type,
+        tmdbId,
+        title,
+        year,
+        season,
+        episode,
+      }),
+    });
 
-    if (tipo === "movie") {
-      setMostrarReproductor(true);
-      return;
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || "No se pudieron cargar los reproductores"
+      );
     }
 
-    try {
-      setCargandoEpisodios(true);
-      setMostrarReproductor(true);
+    setReproductores(data.players ?? []);
 
-      const listaTemporadas =
-        seleccionado.seasons?.filter(
-          (season) =>
-            season.season_number >= 0
-        ) || [];
-
-      setTemporadas(listaTemporadas);
-
-      if (listaTemporadas.length > 0) {
-        const primera =
-          listaTemporadas[0].season_number;
-
-        setTemporada(primera);
-
-        await cargarEpisodios(
-          seleccionado.id,
-          primera
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setCargandoEpisodios(false);
+    if (!data.players?.length) {
+      setErrorReproductores(
+        "No hay reproductores disponibles."
+      );
     }
+  } catch (error) {
+    setErrorReproductores(
+      error instanceof Error
+        ? error.message
+        : "Error al consultar el backend."
+    );
+  } finally {
+    setCargandoReproductores(false);
   }
+}
+
+  
+async function abrirReproductor() {
+  if (!seleccionado) return;
+
+  setMostrarReproductor(true);
+
+  if (tipo === "movie") {
+    const titulo = seleccionado.title || seleccionado.name || "";
+    const fecha = seleccionado.release_date || "";
+    const anioPelicula = Number(fecha.slice(0, 4)) || undefined;
+
+    await cargarReproductores(
+      "movie",
+      seleccionado.id,
+      titulo,
+      anioPelicula
+    );
+
+    return;
+  }
+
+  try {
+    setCargandoEpisodios(true);
+
+    const listaTemporadas =
+      seleccionado.seasons?.filter(
+        (season) => season.season_number >= 0
+      ) || [];
+
+    setTemporadas(listaTemporadas);
+
+    if (listaTemporadas.length > 0) {
+      const primera = listaTemporadas[0].season_number;
+
+      setTemporada(primera);
+
+      await cargarEpisodios(seleccionado.id, primera);
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setCargandoEpisodios(false);
+  }
+}
+
 
   async function cargarEpisodios(
     id: number,
@@ -389,17 +469,28 @@ function Peliculas() {
     }
   }
 
-  function reproducirEpisodio() {
-    if (
-      !seleccionado ||
-      temporada === null ||
-      episodio === null
-    ) {
-      return;
-    }
-
-    setMostrarReproductor(true);
+  
+async function reproducirEpisodio() {
+  if (
+    !seleccionado ||
+    temporada === null ||
+    episodio === null
+  ) {
+    return;
   }
+
+  setMostrarReproductor(true);
+
+  await cargarReproductores(
+    "tv",
+    seleccionado.id,
+    seleccionado.name || seleccionado.title || "",
+    undefined,
+    temporada,
+    episodio
+  );
+}
+
 
   const trailer =
     seleccionado
@@ -809,15 +900,44 @@ function Peliculas() {
 
           {/* PELÍCULA */}
 
-          {tipo === "movie" && (
-            <iframe
-  src={`https://embos.top/movie/?mid=${seleccionado?.id}`}
-  className="watch-frame"
-  title="Película"
-  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-  allowFullScreen
-/>
-          )}
+          
+{tipo === "movie" && (
+  <div className="movie-player">
+    {cargandoReproductores && (
+      <p>Buscando reproductores...</p>
+    )}
+
+    {errorReproductores && (
+      <p>{errorReproductores}</p>
+    )}
+
+    {!cargandoReproductores && reproductores.length > 0 && (
+  <>
+    <div className="player-controls">
+      {reproductores.map((rep, i) => (
+        <button
+          key={rep.embedUrl}
+          className={i === reproductorActual ? "watch-button active" : "watch-button"}
+          onClick={() => setReproductorActual(i)}
+        >
+          {rep.server}
+        </button>
+      ))}
+    </div>
+
+    <iframe
+      key={reproductores[reproductorActual].embedUrl}
+      className="watch-frame"
+      src={reproductores[reproductorActual].embedUrl}
+      title="Película"
+      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+      allowFullScreen
+    />
+  </>
+)}
+  </div>
+)}
+
 
           {/* SERIE */}
 
@@ -922,16 +1042,46 @@ function Peliculas() {
                 ▶ Reproducir
               </button>
 
-              {temporada !== null &&
-                episodio !== null && (
-                  <iframe
-  className="watch-frame"
-  src={`https://embos.top/tv/?mid=${seleccionado?.id}&s=${temporada}&e=${episodio}`}
-  title="Serie"
-  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-  allowFullScreen
-/>
-                )}
+              {temporada !== null && episodio !== null && (
+  <div className="series-player-frame">
+    {cargandoReproductores && (
+      <p>Buscando reproductores...</p>
+    )}
+
+    {errorReproductores && (
+      <p>{errorReproductores}</p>
+    )}
+
+    {!cargandoReproductores && reproductores.length > 0 && (
+      <>
+        <div className="player-controls">
+          {reproductores.map((rep, i) => (
+            <button
+              key={rep.embedUrl}
+              className={
+                i === reproductorActual
+                  ? "watch-button active"
+                  : "watch-button"
+              }
+              onClick={() => setReproductorActual(i)}
+            >
+              {rep.server ?? rep.provider}
+            </button>
+          ))}
+        </div>
+
+        <iframe
+          key={reproductores[reproductorActual].embedUrl}
+          className="watch-frame"
+          src={reproductores[reproductorActual].embedUrl}
+          title="Serie"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          allowFullScreen
+        />
+      </>
+    )}
+  </div>
+)}
 
             </div>
           )}

@@ -63,6 +63,10 @@ app.post("/api/reproductores", async (req, res) => {
   }
 });
 
-app.listen(3001, () => {
-  console.log("Backend activo en http://localhost:3001");
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(3001, () => {
+    console.log("Backend activo en http://localhost:3001");
+  });
+}
+
+export default app;

@@ -10,6 +10,6 @@ export async function getImdbId(
   );
   if (!res.ok) return undefined;
 
-  const data = await res.json();
+  const data = (await res.json()) as { imdb_id?: string | null };
   return data.imdb_id || undefined;
 }

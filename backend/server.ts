@@ -1,14 +1,14 @@
 import express from "express";
 import cors from "cors";
-import { getPlayers, type MediaRequest } from "./providers";
-import { getImdbId } from "./tmdb";
+import { getPlayers, type MediaRequest } from "./providers.js";
+import { getImdbId } from "./tmdb.js";
 
 // ⚠️ IMPORTANTE: importar los providers ANTES de usar getPlayers
 // y en el orden de prioridad que quieres.
-import "./providers/cinecalidad"; // 1º (solo películas)
-import "./providers/playlatin";   // 2º
-import "./providers/tonplayer";   // 3º
-import "./providers/embos";       // 4º
+import "./providers/cinecalidad.js"; // 1º (solo películas)
+import "./providers/playlatin.js";   // 2º
+import "./providers/tonplayer.js";   // 3º
+import "./providers/embos.js";       // 4º
 
 const app = express();
 app.use(cors());

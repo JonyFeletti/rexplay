@@ -1,4 +1,4 @@
-import { registerProvider, type Player } from "../providers";
+import { registerProvider, type Player } from "../providers.js";
 
 registerProvider("playlatin", async (media) => {
   if (!media.imdbId) return [];

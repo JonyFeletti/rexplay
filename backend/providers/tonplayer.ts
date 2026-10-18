@@ -1,4 +1,4 @@
-import { registerProvider, type Player } from "../providers";
+import { registerProvider, type Player } from "../providers.js";
 
 registerProvider("tonplayer", async (media) => {
   const url = media.type === "movie"

@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { registerProvider, type MediaRequest, type Player } from "../providers";
+import { registerProvider, type MediaRequest, type Player } from "../providers.js";
 
 const BASE_URL = "https://www.cinecalidad.my/pelicula/";
 

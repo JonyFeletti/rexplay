@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+# Variables de entorno (en cualquier carpeta)
+**/.env
+**/.env.*
+!**/.env.example

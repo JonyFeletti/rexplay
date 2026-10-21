@@ -7,7 +7,7 @@
  *  - Notificaciones (webhooks): topics "subscription_preapproval" y "subscription_authorized_payment"
  */
 import crypto from "node:crypto";
-import { config } from "./config";
+import { config } from "./config.js";
 
 export class MercadoPagoError extends Error {
   constructor(

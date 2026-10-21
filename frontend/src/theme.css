@@ -1,0 +1,257 @@
+/* =====================================================================
+   Tema RexPlay: estética tipo Disney+ (azul noche, tarjetas con borde
+   que se ilumina, navegación con subrayado animado).
+   Se carga DESPUÉS de index.css y billing.css y los pisa.
+   Para cambiar la paleta tocá solo las variables de :root.
+   ===================================================================== */
+:root {
+  --bg: #040714;
+  --surface: #1a1d29;
+  --surface-2: #252a3b;
+  --line: rgba(249, 249, 249, 0.12);
+  --text: #f9f9f9;
+  --muted: #b4b8c6;
+  --blue: #0063e5;
+  --blue-hover: #0483ee;
+  --card-border: rgba(249, 249, 249, 0.1);
+  --card-border-hover: rgba(249, 249, 249, 0.75);
+  --shadow-rest: rgb(0 0 0 / 69%) 0 26px 30px -10px, rgb(0 0 0 / 73%) 0 16px 10px -10px;
+  --shadow-hover: rgb(0 0 0 / 80%) 0 40px 58px -16px, rgb(0 0 0 / 72%) 0 30px 22px -10px;
+  --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+html { color-scheme: dark; }
+
+body {
+  font-family: "Avenir Next", Avenir, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 120% 60% at 50% -8%, #1d2f7a 0%, rgba(13, 22, 64, 0.85) 38%, transparent 72%),
+    linear-gradient(180deg, #0a1030 0%, var(--bg) 55%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* ---------- Barra superior ---------- */
+.header,
+.peliculas-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 0 clamp(16px, 3.6vw, 48px);
+  min-height: 70px;
+  border-bottom: 0;
+  background: linear-gradient(180deg, rgba(4, 7, 20, 0.97) 0%, rgba(4, 7, 20, 0.8) 55%, rgba(4, 7, 20, 0) 100%);
+}
+
+/* Contenido a todo el ancho, alineado con el logo de la barra */
+.main,
+.peliculas-main { width: 100%; max-width: none; padding-inline: clamp(16px, 3.6vw, 48px); }
+.header h1,
+.peliculas-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.header p,
+.peliculas-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.header-actions { display: flex; align-items: center; gap: clamp(14px, 2.4vw, 32px); }
+
+/* Enlaces de navegación con subrayado que crece */
+.movies-button,
+.volver-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.movies-button::after,
+.volver-button::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 2px;
+  height: 2px;
+  background: var(--text);
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+  transition: transform 0.3s var(--ease), opacity 0.3s var(--ease);
+}
+.movies-button:hover,
+.volver-button:hover { transform: none; filter: none; }
+.movies-button:hover::after,
+.volver-button:hover::after,
+.movies-button:focus-visible::after,
+.volver-button:focus-visible::after { transform: scaleX(1); opacity: 1; }
+
+/* ---------- Títulos de sección ---------- */
+.channels h2,
+.peliculas-main h2 { font-size: 22px; font-weight: 600; letter-spacing: 0.01em; margin: 0 0 20px; }
+
+/* ---------- Reproductor de TV ---------- */
+.player {
+  /* mantiene 16:9 pero nunca más alto que la pantalla, para que se vean los canales abajo */
+  width: min(100%, calc(72vh * 16 / 9));
+  margin-inline: auto;
+  border: 3px solid var(--card-border);
+  border-radius: 10px;
+  background: #02030a;
+  box-shadow: var(--shadow-rest);
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  overflow: hidden;
+}
+.player-placeholder { color: var(--muted); }
+.player-placeholder span { font-size: 54px; opacity: 0.85; }
+
+/* ---------- Tarjetas (canales y pósters) ---------- */
+.channel-card,
+.movie-card {
+  background: var(--surface);
+  border: 3px solid var(--card-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-rest);
+  transition: transform 0.28s var(--ease), border-color 0.28s var(--ease), box-shadow 0.28s var(--ease);
+}
+.movie-card { cursor: pointer; }
+.movie-card img, .no-poster { background: var(--surface-2); }
+
+/* Hover sutil: crece apenas y el borde se ilumina. Solo en dispositivos con mouse. */
+@media (hover: hover) {
+  .channel-card:hover,
+  .movie-card:hover {
+    transform: scale(1.035);
+    border-color: var(--card-border-hover);
+    box-shadow: var(--shadow-hover);
+  }
+}
+.movie-card:focus-visible { transform: scale(1.035); border-color: var(--card-border-hover); box-shadow: var(--shadow-hover); outline-offset: 4px; }
+.channel-card.selected { border-color: #fff; box-shadow: var(--shadow-hover); }
+
+.channel-card h3 { color: var(--text); font-weight: 600; }
+.movie-info { padding: 12px 12px 14px; }
+.movie-info h3 { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.movie-meta { color: var(--muted); }
+
+/* ---------- Pestañas y buscador ---------- */
+.content-tabs { gap: 8px; }
+.content-tabs button {
+  background: transparent;
+  border: 1px solid rgba(249, 249, 249, 0.28);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: background 0.2s, border-color 0.2s;
+}
+.content-tabs button:hover { background: rgba(249, 249, 249, 0.1); border-color: #fff; }
+.content-tabs button.active { background: var(--text); color: #04060f; border-color: var(--text); }
+
+.search-box input {
+  background: rgba(249, 249, 249, 0.08);
+  border: 1px solid rgba(249, 249, 249, 0.2);
+  border-radius: 999px;
+  padding: 14px 20px;
+  color: var(--text);
+}
+.search-box input:focus { border-color: #fff; background: rgba(249, 249, 249, 0.12); }
+.search-box button {
+  background: var(--blue);
+  color: #fff;
+  border-radius: 999px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.search-box button:hover { background: var(--blue-hover); }
+
+.peliculas-page { background: transparent; }
+.loading, .empty { color: var(--muted); }
+
+/* ---------- Detalle de película / serie ---------- */
+.detail-overlay { background: rgba(2, 4, 12, 0.92); backdrop-filter: blur(4px); }
+.detail-modal { background: var(--surface); border-radius: 12px; border: 1px solid var(--line); }
+.detail-gradient { background: linear-gradient(to bottom, transparent 25%, rgba(26, 29, 41, 0.55) 60%, var(--surface) 100%); }
+.detail-backdrop-placeholder { background: var(--surface-2); }
+.detail-content h2 { font-weight: 800; letter-spacing: -0.01em; }
+.genre-chip { background: rgba(249, 249, 249, 0.1); letter-spacing: 0.06em; }
+.rating { color: #fff; font-weight: 700; }
+
+.trailer-button,
+.watch-button,
+.list-button {
+  padding: 13px 26px;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.trailer-button, .watch-button { background: #f9f9f9; color: #000; }
+.trailer-button:hover, .watch-button:hover, .list-button:hover { transform: none; filter: none; }
+.trailer-button:hover, .watch-button:hover { background: #c6c6c6; }
+.list-button { background: rgba(0, 0, 0, 0.35); border: 2px solid #f9f9f9 !important; }
+.list-button:hover { background: rgba(249, 249, 249, 0.15); }
+.detail-close, .fullscreen-close { background: rgba(4, 7, 20, 0.8); border: 1px solid var(--line); transition: background 0.2s; }
+.detail-close:hover, .fullscreen-close:hover { background: rgba(249, 249, 249, 0.2); }
+.episode-selectors select { background: var(--surface); border-color: var(--line); border-radius: 8px; }
+
+/* ---------- Pantallas de suscripción, ingreso y cuenta ---------- */
+.bill-page { background: transparent; }
+.bill-card { background: rgba(26, 29, 41, 0.88); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-rest); backdrop-filter: blur(6px); }
+.bill-card input:not([type="checkbox"]):where(:not(#cardPaymentBrick_container *)) { background: rgba(249, 249, 249, 0.08); border: 1px solid rgba(249, 249, 249, 0.2); }
+.bill-card input:not([type="checkbox"]):where(:not(#cardPaymentBrick_container *)):focus { border-color: #fff; outline: none; }
+.bill-plan { background: rgba(4, 7, 20, 0.55); border-color: var(--line); }
+.bill-plan strong { color: #fff; }
+.bill-btn { background: var(--blue); color: #fff; letter-spacing: 0.12em; text-transform: uppercase; font-size: 13px; transition: background 0.2s; }
+.bill-btn:hover:not(:disabled) { background: var(--blue-hover); }
+.bill-ghost { background: transparent; border: 1px solid rgba(249, 249, 249, 0.4); }
+.bill-ghost:hover:not(:disabled) { background: rgba(249, 249, 249, 0.12); }
+.bill-danger { background: rgba(255, 90, 90, 0.14); color: #ff9a9a; }
+.bill-danger:hover:not(:disabled) { background: rgba(255, 90, 90, 0.24); }
+.bill-link, .bill-card a { color: #fff; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(249, 249, 249, 0.4); }
+.bill-link:hover, .bill-card a:hover { text-decoration-color: #fff; }
+.bill-notice { background: rgba(0, 99, 229, 0.14); border-color: rgba(0, 99, 229, 0.45); }
+.bill-warn { background: rgba(255, 186, 69, 0.12); border-color: rgba(255, 186, 69, 0.4); }
+.bill-bad { background: rgba(255, 90, 90, 0.12); border-color: rgba(255, 90, 90, 0.4); }
+.bill-table th, .bill-table td { border-bottom-color: var(--line); }
+
+/* ---------- Móvil ---------- */
+@media (max-width: 600px) {
+  .header, .peliculas-header { min-height: 60px; }
+  .header h1, .peliculas-header h1 { font-size: 22px; }
+  .movies-button, .volver-button { font-size: 12px; letter-spacing: 0.1em; }
+  .header-actions { gap: 14px; }
+  .channel-card, .movie-card { border-width: 2px; }
+}
+
+/* ---------- Accesibilidad: sin animaciones si el sistema lo pide ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  .channel-card:hover, .movie-card:hover, .movie-card:focus-visible { transform: none; }
+}

@@ -2,6 +2,7 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import Peliculas from "./pages/Peliculas";
+import Watch from "./pages/Watch";
 import { AuthProvider } from "./auth/auth";
 import RequireSubscription from "./components/RequireSubscription";
 import Suscribite from "./pages/Suscribite";
@@ -24,7 +25,6 @@ function Inicio() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-
     async function cargarCanales() {
       const { data, error } = await supabase
         .from("canales")
@@ -127,6 +127,8 @@ function App() {
         <Routes>
           <Route path="/" element={<RequireSubscription><Inicio /></RequireSubscription>} />
           <Route path="/peliculas" element={<RequireSubscription><Peliculas /></RequireSubscription>} />
+          <Route path="/ver/:type/:tmdbId" element={<RequireSubscription><Watch /></RequireSubscription>} />
+          <Route path="/ver/:type/:tmdbId/:season/:episode" element={<RequireSubscription><Watch /></RequireSubscription>} />
           <Route path="/suscribite" element={<Suscribite />} />
           <Route path="/ingresar" element={<Ingresar />} />
           <Route path="/cuenta" element={<Cuenta />} />

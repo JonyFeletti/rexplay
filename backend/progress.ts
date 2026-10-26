@@ -2,7 +2,7 @@ import { supabaseAdmin } from "./supabase.js";
 import { HttpError } from "./errors.js";
 
 export const COMPLETE_RATIO = 0.92;
-export const MIN_SECONDS = 15;
+export const MIN_SECONDS = 1;
 
 export interface ProgressInput {
   media_type: "movie" | "tv";

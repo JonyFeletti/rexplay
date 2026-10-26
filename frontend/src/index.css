@@ -823,3 +823,70 @@ input {
     width: 100%;
   }
 }
+/* =========================
+   PÁGINA DE REPRODUCTOR (/ver/...)
+========================= */
+.watch-page {
+  min-height: 100vh;
+  background: #0f1117;
+  color: white;
+}
+
+.watch-main {
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.watch-main .watch-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 12px;
+  background: #000;
+  display: block;
+}
+
+.resume-hint {
+  color: #9da3b4;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.episode-nav {
+  margin-top: 32px;
+}
+
+.episode-nav h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
+}
+
+.episode-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.episode-btn {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #252936;
+  background: #181b24;
+  color: white;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  transition: 0.2s;
+}
+
+.episode-btn:hover {
+  border-color: #454b5c;
+}
+
+.episode-btn.active {
+  background: #ffba45;
+  color: #281800;
+  border-color: #ffba45;
+  font-weight: 700;
+}

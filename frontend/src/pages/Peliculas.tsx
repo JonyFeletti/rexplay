@@ -1,17 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ContinuarViendo from "../components/ContinuarViendo";
 import ProfileChip from "../components/ProfileChip";
-import { api, type ContinueItem } from "../lib/api";
-import { useWatchProgress, type WatchMeta } from "../lib/useWatchProgress";
 
 type TipoContenido = "movie" | "tv";
-
-type PlayerSource = {
-  provider: string;
-  server: string;
-  embedUrl: string;
-};
 
 type TMDBItem = {
   id: number;
@@ -43,13 +35,6 @@ type TMDBDetail = TMDBItem & {
   }[];
 };
 
-type Episode = {
-  id: number;
-  episode_number: number;
-  name: string;
-  runtime?: number | null;
-};
-
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const BASE_URL = "https://api.themoviedb.org/3";
 const IMAGE_URL = "https://image.tmdb.org/t/p/w500";
@@ -65,25 +50,7 @@ function Peliculas() {
   const [seleccionado, setSeleccionado] = useState<TMDBDetail | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [mostrarTrailer, setMostrarTrailer] = useState(false);
-  const [mostrarReproductor, setMostrarReproductor] = useState(false);
-  const [reproductores, setReproductores] = useState<PlayerSource[]>([]);
-  const [reproductorActual, setReproductorActual] = useState(0);
-  const [cargandoReproductores, setCargandoReproductores] = useState(false);
-  const [errorReproductores, setErrorReproductores] = useState("");
-  const [temporadas, setTemporadas] = useState<NonNullable<TMDBDetail["seasons"]>>([]);
-  const [temporada, setTemporada] = useState<number | null>(null);
-  const [episodios, setEpisodios] = useState<Episode[]>([]);
-  const [episodio, setEpisodio] = useState<number | null>(null);
-  const [cargandoEpisodios, setCargandoEpisodios] = useState(false);
-
-  const [reanudar, setReanudar] = useState<{
-    season: number;
-    episode: number;
-    position: number;
-  } | null>(null);
-  const playerRef = useRef<HTMLIFrameElement>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const continuarProcesado = useRef(false);
+  const navigate = useNavigate();
 
   const [miLista, setMiLista] = useState<{ id: number; type: TipoContenido }[]>(() => {
     try {
@@ -155,8 +122,6 @@ function Peliculas() {
     setCargandoDetalle(true);
     setSeleccionado(null);
     setMostrarTrailer(false);
-    setMostrarReproductor(false);
-    setReanudar(null);
     try {
       const data = await tmdb<TMDBDetail>(`/${tipoContenido}/${id}`, { append_to_response: "videos,credits" });
       setSeleccionado(data);
@@ -169,69 +134,18 @@ function Peliculas() {
   }
 
   function cerrarDetalle() {
-    setReanudar(null);
     setSeleccionado(null);
     setMostrarTrailer(false);
-    setMostrarReproductor(false);
-    setTemporadas([]);
-    setEpisodios([]);
-    setTemporada(null);
-    setEpisodio(null);
   }
 
-  async function continuarViendo(t: TipoContenido, id: number) {
-    const { progress } = await api<{ progress: ContinueItem | null }>(`/api/progress/${t}/${id}`).catch(() => ({
-      progress: null,
-    }));
-
-    setTipo(t);
-    setCargandoDetalle(true);
-    setSeleccionado(null);
-    setMostrarTrailer(false);
-    setMostrarReproductor(false);
-    setReanudar(null);
-
-    try {
-      const data = await tmdb<TMDBDetail>(`/${t}/${id}`, { append_to_response: "videos,credits" });
-      setSeleccionado(data);
-      if (!progress) return;
-
-      if (t === "movie") {
-        setReanudar({ season: 0, episode: 0, position: progress.position_seconds });
-        setMostrarReproductor(true);
-        return;
-      }
-
-      const lista = data.seasons?.filter((season) => season.season_number >= 0) || [];
-      setTemporadas(lista);
-      setTemporada(progress.season);
-      setReanudar({
-        season: progress.season,
-        episode: progress.episode,
-        position: progress.position_seconds,
-      });
-      await cargarEpisodios(id, progress.season);
-      setEpisodio(progress.episode);
-      setMostrarReproductor(true);
-    } catch (error) {
-      console.error(error);
-      setError("No se pudo cargar el detalle.");
-    } finally {
-      setCargandoDetalle(false);
+  function verAhora() {
+    if (!seleccionado) return;
+    if (tipo === "movie") {
+      navigate(`/ver/movie/${seleccionado.id}`);
+    } else {
+      navigate(`/ver/tv/${seleccionado.id}/1/1`);
     }
   }
-
-  useEffect(() => {
-    const destino = searchParams.get("continuar");
-    if (!destino || continuarProcesado.current) return;
-    continuarProcesado.current = true;
-    setSearchParams({}, { replace: true });
-    const [t, id] = destino.split(":");
-    if ((t === "movie" || t === "tv") && Number(id) > 0) {
-      void continuarViendo(t, Number(id));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   function obtenerTrailer(data: TMDBDetail) {
     return (
@@ -267,132 +181,12 @@ function Peliculas() {
     localStorage.setItem("rexpelis_mylist", JSON.stringify(nuevaLista));
   }
 
-  async function cargarReproductores(
-    type: TipoContenido,
-    tmdbId: number,
-    title: string,
-    year?: number,
-    season?: number,
-    episode?: number
-  ) {
-    setCargandoReproductores(true);
-    setErrorReproductores("");
-    setReproductores([]);
-    setReproductorActual(0);
-    try {
-      const response = await fetch("/api/reproductores", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, tmdbId, title, year, season, episode }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudieron cargar los reproductores");
-      setReproductores(data.players ?? []);
-      if (!data.players?.length) setErrorReproductores("No hay reproductores disponibles.");
-    } catch (error) {
-      setErrorReproductores(error instanceof Error ? error.message : "Error al consultar el backend.");
-    } finally {
-      setCargandoReproductores(false);
-    }
-  }
-
-  async function abrirReproductor() {
-    if (!seleccionado) return;
-    setMostrarReproductor(true);
-
-    if (tipo === "movie") {
-      const titulo = seleccionado.title || seleccionado.name || "";
-      const fecha = seleccionado.release_date || "";
-      const anioPelicula = Number(fecha.slice(0, 4)) || undefined;
-      await cargarReproductores("movie", seleccionado.id, titulo, anioPelicula);
-      return;
-    }
-
-    try {
-      setCargandoEpisodios(true);
-      const listaTemporadas = seleccionado.seasons?.filter((s) => s.season_number >= 0) || [];
-      setTemporadas(listaTemporadas);
-      if (listaTemporadas.length > 0) {
-        const primera = listaTemporadas[0].season_number;
-        setTemporada(primera);
-        await cargarEpisodios(seleccionado.id, primera);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setCargandoEpisodios(false);
-    }
-  }
-
-  async function cargarEpisodios(id: number, numeroTemporada: number) {
-    setCargandoEpisodios(true);
-    try {
-      const data = await tmdb<{ episodes: Episode[] }>(`/tv/${id}/season/${numeroTemporada}`);
-      setEpisodios(data.episodes ?? []);
-      if (data.episodes?.length) setEpisodio(data.episodes[0].episode_number);
-      else setEpisodio(null);
-    } catch (error) {
-      console.error(error);
-      setEpisodios([]);
-      setEpisodio(null);
-    } finally {
-      setCargandoEpisodios(false);
-    }
-  }
-
-  async function reproducirEpisodio() {
-    if (!seleccionado || temporada === null || episodio === null) return;
-    setMostrarReproductor(true);
-    await cargarReproductores(
-      "tv",
-      seleccionado.id,
-      seleccionado.name || seleccionado.title || "",
-      undefined,
-      temporada,
-      episodio
-    );
-  }
-
   const trailer = seleccionado ? obtenerTrailer(seleccionado) : null;
   const duracion = seleccionado ? obtenerDuracion(seleccionado) : "";
   const reparto = seleccionado?.credits?.cast?.slice(0, 6).map((a) => a.name).join(", ");
   const anio = seleccionado
     ? (seleccionado.release_date || seleccionado.first_air_date || "").slice(0, 4)
     : "";
-
-  // ---------- Progreso / Continuar viendo ----------
-  const episodioActual = episodios.find((ep) => ep.episode_number === episodio);
-
-  const metaReproduccion: WatchMeta | null =
-    mostrarReproductor && seleccionado && (tipo === "movie" || (temporada !== null && episodio !== null))
-      ? {
-          mediaType: tipo,
-          tmdbId: seleccionado.id,
-          season: tipo === "tv" ? (temporada ?? 0) : 0,
-          episode: tipo === "tv" ? (episodio ?? 1) : 0,
-          title: seleccionado.title || seleccionado.name || "Sin título",
-          episodeTitle: tipo === "tv" ? (episodioActual?.name ?? null) : null,
-          posterPath: seleccionado.poster_path,
-          backdropPath: seleccionado.backdrop_path,
-          durationSeconds:
-            60 *
-            (tipo === "movie"
-              ? (seleccionado.runtime ?? 0)
-              : (episodioActual?.runtime ?? seleccionado.episode_run_time?.[0] ?? 0)),
-        }
-      : null;
-
-  const inicioSegundos =
-    reanudar && (tipo === "movie" || (reanudar.season === temporada && reanudar.episode === episodio))
-      ? reanudar.position
-      : 0;
-
-  // El origen del iframe lo tomamos del player actual
-  const playerOrigin = reproductores[reproductorActual]?.embedUrl
-    ? new URL(reproductores[reproductorActual].embedUrl).origin
-    : "";
-
-  useWatchProgress(metaReproduccion, inicioSegundos, playerRef, playerOrigin);
 
   return (
     <div className="peliculas-page">
@@ -526,7 +320,7 @@ function Peliculas() {
                 <button className="trailer-button" disabled={!trailer} onClick={() => setMostrarTrailer(true)}>
                   ▶ {trailer ? "Ver trailer" : "Sin trailer"}
                 </button>
-                <button className="watch-button" onClick={abrirReproductor}>▶ Ver ahora</button>
+                <button className="watch-button" onClick={verAhora}>▶ Ver ahora</button>
                 <button className="list-button" onClick={alternarMiLista}>
                   {estaEnMiLista(seleccionado.id, tipo) ? "✓ En mi lista" : "+ Mi Lista"}
                 </button>
@@ -555,113 +349,6 @@ function Peliculas() {
               allowFullScreen
             />
           </div>
-        </div>
-      )}
-
-      {mostrarReproductor && (
-        <div className="fullscreen-player">
-          <button className="fullscreen-close" onClick={() => setMostrarReproductor(false)}>✕</button>
-
-          {/* PELÍCULA */}
-          {tipo === "movie" && (
-            <div className="movie-player">
-              {cargandoReproductores && <p>Buscando reproductores...</p>}
-              {errorReproductores && <p>{errorReproductores}</p>}
-              {!cargandoReproductores && reproductores.length > 0 && (
-                <>
-                  <div className="player-controls">
-                    {reproductores.map((rep, i) => (
-                      <button
-                        key={rep.embedUrl}
-                        className={i === reproductorActual ? "watch-button active" : "watch-button"}
-                        onClick={() => setReproductorActual(i)}
-                      >
-                        {rep.server ?? rep.provider}
-                      </button>
-                    ))}
-                  </div>
-                  <iframe
-                    ref={playerRef}
-                    key={reproductores[reproductorActual].embedUrl}
-                    className="watch-frame"
-                    src={reproductores[reproductorActual].embedUrl}
-                    title="Película"
-                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                    allowFullScreen
-                  />
-                </>
-              )}
-            </div>
-          )}
-
-          {/* SERIE */}
-          {tipo === "tv" && (
-            <div className="series-player">
-              <h2>Seleccionar episodio</h2>
-              <div className="episode-selectors">
-                <select
-                  value={temporada ?? ""}
-                  onChange={async (e) => {
-                    const nt = Number(e.target.value);
-                    setTemporada(nt);
-                    if (seleccionado) await cargarEpisodios(seleccionado.id, nt);
-                  }}
-                >
-                  {temporadas.map((s) => (
-                    <option key={s.id} value={s.season_number}>{s.name}</option>
-                  ))}
-                </select>
-                <select value={episodio ?? ""} onChange={(e) => setEpisodio(Number(e.target.value))}>
-                  {episodios.map((ep) => (
-                    <option key={ep.id} value={ep.episode_number}>
-                      Episodio {ep.episode_number}{ep.name ? ` — ${ep.name}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {cargandoEpisodios && <p>Cargando episodios...</p>}
-
-              <button
-                className="watch-button"
-                onClick={reproducirEpisodio}
-                disabled={temporada === null || episodio === null}
-              >
-                ▶ Reproducir
-              </button>
-
-              {temporada !== null && episodio !== null && (
-                <div className="series-player-frame">
-                  {cargandoReproductores && <p>Buscando reproductores...</p>}
-                  {errorReproductores && <p>{errorReproductores}</p>}
-                  {!cargandoReproductores && reproductores.length > 0 && (
-                    <>
-                      <div className="player-controls">
-                        {reproductores.map((rep, i) => (
-                          <button
-                            key={rep.embedUrl}
-                            className={i === reproductorActual ? "watch-button active" : "watch-button"}
-                            onClick={() => setReproductorActual(i)}
-                          >
-                            {rep.server ?? rep.provider}
-                          </button>
-                        ))}
-                      </div>
-                      <iframe
-                        ref={playerRef}
-                        key={reproductores[reproductorActual].embedUrl}
-                        className="watch-frame"
-                        src={reproductores[reproductorActual].embedUrl}
-                        title="Serie"
-                        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>

@@ -54,7 +54,13 @@ export default function ContinuarViendo() {
               <div className="cw-item" key={`${i.media_type}:${i.tmdb_id}`}>
                 <button
                   className="cw-card"
-                  onClick={() => navigate(`/peliculas?continuar=${i.media_type}:${i.tmdb_id}`)}
+                  onClick={() => {
+                    if (i.media_type === "movie") {
+                      navigate(`/ver/movie/${i.tmdb_id}`);
+                    } else {
+                      navigate(`/ver/tv/${i.tmdb_id}/${i.season}/${i.episode}`);
+                    }
+                  }}
                   aria-label={`Continuar ${i.title}. ${progressLabel(i)}`}
                 >
                   <span className="cw-thumb">

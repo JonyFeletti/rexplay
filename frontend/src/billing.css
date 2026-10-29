@@ -20,3 +20,23 @@
 .bill-table { width: 100%; border-collapse: collapse; font-size: 14px; } .bill-table th, .bill-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #252936; }
 .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .bill-block { display: block; width: 100%; margin-top: 16px; padding: 14px 20px; font-size: 16px; }
+
+/* ---------- Contraseña con ojito ---------- */
+.pw-wrap { position: relative; display: flow-root; }
+.bill-card .pw-wrap input:not([type=checkbox]) { padding-right: 44px; }
+.pw-eye { position: absolute; top: 6px; right: 0; bottom: 0; width: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #9da3b4; cursor: pointer; border-radius: 0 8px 8px 0; }
+.pw-eye:hover, .pw-eye:focus-visible { color: #ffba45; }
+.pw-eye:focus-visible { outline: 2px solid #ffba45; outline-offset: -2px; }
+
+/* ---------- Campos de tarjeta ---------- */
+.cf-field { display: block; margin: 12px 0; }
+.cf-label { display: block; color: #c9cdd8; font-size: 14px; }
+.cf-secure { margin-top: 6px; height: 44px; border-radius: 8px; border: 1px solid #2c3140; background: #0f1117; overflow: hidden; }
+.cf-secure:focus-within { border-color: #ffba45; }
+.cf-secure.cf-invalid { border-color: #ff7a7a; }
+.cf-secure > div, .cf-secure iframe { height: 42px; width: 100%; display: block; }
+.cf-error { display: block; margin-top: 4px; color: #ff7a7a; font-size: 13px; }
+.cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cf-row-doc { grid-template-columns: 130px 1fr; }
+.bill-card select { display: block; width: 100%; margin-top: 6px; padding: 11px 12px; border-radius: 8px; border: 1px solid #2c3140; background: #0f1117; color: #fff; }
+@media (max-width: 420px) { .cf-row, .cf-row-doc { grid-template-columns: 1fr; gap: 0; } }

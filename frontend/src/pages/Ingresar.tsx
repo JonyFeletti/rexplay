@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/auth";
+import PasswordInput from "../components/PasswordInput";
 
 export default function Ingresar() {
   const { user } = useAuth();
@@ -31,7 +32,7 @@ export default function Ingresar() {
         </label>
         <label>
           Contraseña
-          <input type="password" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} required />
+          <PasswordInput value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} required />
         </label>
         <button className="bill-btn" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
         {error && <p className="bill-error" role="alert">{error}</p>}

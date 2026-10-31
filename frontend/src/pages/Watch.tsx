@@ -68,6 +68,7 @@ export default function Watch() {
   const [inicioSegundos, setInicioSegundos] = useState(0);
   const playerRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const uiRef = useRef<HTMLDivElement>(null);
 
   // 1. Cargar detalle de TMDB
   useEffect(() => {
@@ -156,24 +157,53 @@ export default function Watch() {
       .finally(() => setCargandoReproductores(false));
   }, [detalle, tipo, seasonNum, episodeNum]);
 
-  // 5. Idle: ocultar controles a los 3s
-  useEffect(() => {
-    let timer: number;
-    const reset = () => {
-      setIdle(false);
-      clearTimeout(timer);
-      timer = window.setTimeout(() => setIdle(true), 3000);
-    };
-    const onMove = () => reset();
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("touchstart", onMove);
-    reset();
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("touchstart", onMove);
-      clearTimeout(timer);
-    };
-  }, []);
+// Idle: ocultar UI a los 3s, pero NO si el mouse está sobre la interfaz
+// Idle: ocultar UI a los 3s, pero NO si el mouse está sobre la interfaz
+// o si el drawer está abierto
+useEffect(() => {
+  let timer: number;
+  const reset = () => {
+    setIdle(false);
+    clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      // No ocultar si el drawer está abierto
+      if (drawerAbierto) return;
+      // No ocultar si el mouse está sobre la barra superior o el botón de pantalla completa
+      if (
+        uiRef.current?.matches(":hover") ||
+        document.querySelector(".watch-fullscreen-btn:hover")
+      ) {
+        return;
+      }
+      setIdle(true);
+    }, 3000);
+  };
+  const onMove = () => reset();
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("touchstart", onMove);
+  window.addEventListener("click", onMove);
+  window.addEventListener("keydown", onMove);
+  reset();
+  return () => {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("touchstart", onMove);
+    window.removeEventListener("click", onMove);
+    window.removeEventListener("keydown", onMove);
+    clearTimeout(timer);
+  };
+}, [drawerAbierto]);
+// Cerrar el drawer de episodios al hacer click fuera
+useEffect(() => {
+  if (!drawerAbierto) return;
+  const onMouseDown = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest(".episodes-drawer")) {
+      setDrawerAbierto(false);
+    }
+  };
+  document.addEventListener("mousedown", onMouseDown);
+  return () => document.removeEventListener("mousedown", onMouseDown);
+}, [drawerAbierto]);
 
   // 6. Guardar progreso
   const episodioActual = episodios.find((ep) => ep.episode_number === episodeNum);
@@ -248,7 +278,7 @@ export default function Watch() {
       </div>
 
       {/* Barra superior superpuesta */}
-      <div className="watch-top-bar">
+      <div className="watch-top-bar" ref={uiRef}>
         <div className="watch-top-left">
           <Link to="/peliculas" className="watch-back-btn">
             ← Volver

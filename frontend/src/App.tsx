@@ -11,6 +11,7 @@ import Cuenta from "./pages/Cuenta";
 import Perfiles from "./pages/Perfiles";
 import ContinuarViendo from "./components/ContinuarViendo";
 import ProfileChip from "./components/ProfileChip";
+import Vivo from "./pages/Vivo";
 
 type Canal = {
   nombre: string;
@@ -66,6 +67,9 @@ function Inicio() {
           <Link to="/cuenta" className="movies-button">
             Mi cuenta
           </Link>
+          <Link to="/vivo" className="movies-button">
+  🔴 En vivo
+</Link>
           <Link to="/peliculas" className="movies-button">
             Películas
           </Link>
@@ -133,6 +137,7 @@ function App() {
           <Route path="/ingresar" element={<Ingresar />} />
           <Route path="/cuenta" element={<Cuenta />} />
           <Route path="/perfiles" element={<RequireSubscription needProfile={false}><Perfiles /></RequireSubscription>} />
+          <Route path="/vivo" element={<RequireSubscription><Vivo /></RequireSubscription>} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

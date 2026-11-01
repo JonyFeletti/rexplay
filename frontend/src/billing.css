@@ -47,3 +47,15 @@
 .cf-row-doc { grid-template-columns: 130px 1fr; }
 .bill-card select { display: block; width: 100%; margin-top: 6px; padding: 11px 12px; border-radius: 8px; border: 1px solid #2c3140; background: #0f1117; color: #fff; }
 @media (max-width: 420px) { .cf-row, .cf-row-doc { grid-template-columns: 1fr; gap: 0; } }
+
+/* Verificación de email */
+.bill-verify { background: #0f1117; border: 1px solid #252936; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+.bill-verify .bill-muted { margin: 0 0 4px; }
+.bill-verify strong { color: #fff; word-break: break-all; }
+.bill-card input.bill-code { text-align: center; font-size: 24px; letter-spacing: 10px; font-variant-numeric: tabular-nums; }
+.bill-verify-actions { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }
+.bill-verify-actions .bill-link:disabled { color: #6f7587; cursor: default; }
+.bill-verified { color: #6fdc8c; font-size: 14px; margin: 12px 0 0; }
+.bill-card input[readonly] { opacity: .7; }
+.bill-locked { opacity: .5; }
+.bill-btn.bill-block + .bill-verify-actions { margin-top: 12px; }

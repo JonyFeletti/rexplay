@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import express, { NextFunction, Request, RequestHandler, Response } from "express";
 import * as billing from "./billing.js";
+import * as emailVerification from "./emailVerification.js";
 import { config } from "./config.js";
 import { HttpError } from "./errors.js";
 import { verifyWebhookSignature } from "./mercadopago.js";
@@ -147,6 +148,64 @@ export function registerSubscriptionRoutes(app: express.Express): void {
   app.get("/api/config", (_req, res) => {
     res.json({ mp_public_key: config.mp.publicKey });
   });
+
+  // ---------- Alta de cuenta con verificación de email (código de 6 dígitos) ----------
+  app.post(
+    "/api/email-verification/send",
+    rateLimit("verif-send", 8, 60_000),
+    ah(async (req, res) => {
+      const { resendInSeconds } = await emailVerification.sendCode(str(body(req).email));
+      res.json({ ok: true, resend_in: resendInSeconds });
+    }),
+  );
+
+  app.post(
+    "/api/email-verification/verify",
+    rateLimit("verif-check", 20, 60_000),
+    ah(async (req, res) => {
+      const b = body(req);
+      const token = await emailVerification.verifyCode(str(b.email), str(b.code));
+      res.json({ ok: true, verification_token: token });
+    }),
+  );
+
+  /** Crea la cuenta. Solo funciona con un email previamente verificado (token de un solo uso). */
+  app.post(
+    "/api/signup",
+    rateLimit("signup", 10, 60_000),
+    ah(async (req, res) => {
+      const b = body(req);
+      const name = str(b.name).trim().slice(0, 80);
+      const email = emailVerification.normalizeEmail(str(b.email));
+      const password = str(b.password);
+
+      if (name.length < 2) throw new HttpError(400, "Ingresá tu nombre.");
+      if (email.length > 254 || !emailVerification.EMAIL_RE.test(email)) throw new HttpError(400, "El email no es válido.");
+      if (password.length < 8 || password.length > 72) {
+        throw new HttpError(400, "La contraseña debe tener entre 8 y 72 caracteres.");
+      }
+
+      const proofId = await emailVerification.checkProof(email, str(b.verification_token));
+
+      const { error } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // ya lo verificamos nosotros con el código; Supabase no manda su propio mail
+        user_metadata: { name },
+      });
+      if (error) {
+        if (error.code === "email_exists" || /already (been )?registered|already exists/i.test(error.message)) {
+          throw new HttpError(409, "Ya existe una cuenta con ese email. Iniciá sesión.");
+        }
+        if (error.code === "weak_password") throw new HttpError(400, "Esa contraseña es muy débil. Probá con otra.");
+        console.error("No se pudo crear el usuario", error);
+        throw new HttpError(400, "No pudimos crear la cuenta. Probá de nuevo.");
+      }
+
+      await emailVerification.consumeProof(proofId);
+      res.status(201).json({ ok: true });
+    }),
+  );
 
   /** "Me": devuelve perfil, suscripción y pagos del usuario autenticado. */
   app.get(

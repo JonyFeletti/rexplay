@@ -34,7 +34,14 @@
 .cf-secure { margin-top: 6px; height: 44px; border-radius: 8px; border: 1px solid #2c3140; background: #0f1117; overflow: hidden; }
 .cf-secure:focus-within { border-color: #ffba45; }
 .cf-secure.cf-invalid { border-color: #ff7a7a; }
+.cf-secure { display: flex; align-items: center; }
 .cf-secure > div, .cf-secure iframe { height: 42px; width: 100%; display: block; }
+.cf-secure > div { flex: 1; min-width: 0; width: auto; }
+.cf-brand { flex: none; height: 24px; width: auto; max-width: 48px; margin-right: 10px; object-fit: contain; }
+.cf-lock { display: inline-block; vertical-align: -3px; margin-right: 6px; }
+/* Inputs propios de la tarjeta: mismo aspecto oscuro que los campos seguros de Mercado Pago */
+.bill-card .cf-field input.cf-input { background: #0f1117; border: 1px solid #2c3140; }
+.bill-card .cf-field input.cf-input:focus { border-color: #ffba45; outline: none; }
 .cf-error { display: block; margin-top: 4px; color: #ff7a7a; font-size: 13px; }
 .cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .cf-row-doc { grid-template-columns: 130px 1fr; }

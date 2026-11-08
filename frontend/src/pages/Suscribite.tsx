@@ -9,6 +9,25 @@ import { api, ApiError, money, type CardData, type Plan } from "../lib/api";
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const RESEND_SECONDS = 45;
 
+type ApprovalOutcome = { status: "approved" } | { status: "failed"; message: string } | { status: "timeout" };
+
+/** Consulta cada 2 s (hasta ~2 minutos) si el webhook ya aprobó el pago y creó la cuenta. */
+async function waitForApproval(signupId: string): Promise<ApprovalOutcome> {
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const st = await api<{ status: "pending" | "approved" | "failed"; message?: string }>(
+        `/api/checkout/${signupId}/status`,
+      );
+      if (st.status === "approved") return { status: "approved" };
+      if (st.status === "failed") return { status: "failed", message: st.message ?? "El pago fue rechazado." };
+    } catch {
+      /* error de red momentáneo: seguimos intentando */
+    }
+  }
+  return { status: "timeout" };
+}
+
 export default function Suscribite() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -126,40 +145,43 @@ export default function Suscribite() {
       // 1. Tokenizar la tarjeta (Mercado Pago). Los datos sensibles nunca llegan a nuestro servidor.
       const card: CardData = await cardRef.current!.tokenize();
 
-      // 2. Crear la cuenta en el backend (exige el token del email verificado)
+      // 2. Mandamos el alta + el pago. La cuenta NO se crea todavía: se crea cuando Mercado Pago aprueba el pago.
+      let signupId = "";
       try {
-        await api("/api/signup", {
+        const res = await api<{ signup_id: string }>("/api/checkout", {
           method: "POST",
           body: {
             name: form.name.trim(),
             email: form.email.trim(),
             password: form.password,
             verification_token: verifiedToken,
+            plan_id: plan?.id,
+            accept_terms: true,
+            card,
           },
         });
+        signupId = res.signup_id;
       } catch (e) {
-        return setError(e instanceof ApiError ? e.message : "No pudimos crear la cuenta.");
+        return setError(e instanceof ApiError ? e.message : "No pudimos procesar el pago.");
       }
 
-      // 3. Iniciar sesión (el email ya está confirmado, no hace falta ningún enlace)
+      // 3. Esperamos la aprobación (el webhook crea la cuenta)
+      setMsg("Procesando el pago…");
+      const outcome = await waitForApproval(signupId);
+      setMsg("");
+      if (outcome.status === "failed") return setError(outcome.message);
+      if (outcome.status === "timeout") {
+        return setMsg(
+          "Todavía estamos esperando la confirmación del pago. Apenas se apruebe te creamos la cuenta y te avisamos por mail; después podés iniciar sesión.",
+        );
+      }
+
+      // 4. Cuenta creada: iniciamos sesión
       const { error: loginErr } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
       });
-      if (loginErr) {
-        return setMsg("Tu cuenta se creó. Iniciá sesión y completá el pago desde tu cuenta.");
-      }
-
-      // 4. Con sesión activa: creamos la suscripción y cobramos ahora
-      try {
-        await api("/api/subscription", {
-          method: "POST",
-          body: { plan_id: plan?.id, accept_terms: true, card },
-        });
-      } catch (e) {
-        await supabase.auth.signOut();
-        return setError(e instanceof ApiError ? e.message : "No pudimos procesar el pago.");
-      }
+      if (loginErr) return setMsg("Tu pago se aprobó y la cuenta está lista. Iniciá sesión para empezar.");
       navigate("/", { replace: true });
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : "Revisá los datos de la tarjeta.");
@@ -287,7 +309,7 @@ export default function Suscribite() {
         {msg && <div className="bill-notice">{msg}</div>}
         {error && <p className="bill-error" role="alert">{error}</p>}
         <button type="submit" className="bill-btn bill-block" disabled={!plan || !cardReady || !verified || sending}>
-          {sending ? "Creando tu cuenta…" : `Crear cuenta y pagar ${plan ? money(plan.price) : ""}`.trim()}
+          {sending ? "Procesando el pago…" : `Crear cuenta y pagar ${plan ? money(plan.price) : ""}`.trim()}
         </button>
         <p className="bill-muted bill-small">
           Si no podemos cobrar una renovación, tenés {plan?.grace_days ?? 5} días de gracia y te avisamos por mail.

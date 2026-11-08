@@ -169,41 +169,53 @@ export function registerSubscriptionRoutes(app: express.Express): void {
     }),
   );
 
-  /** Crea la cuenta. Solo funciona con un email previamente verificado (token de un solo uso). */
+  /**
+   * Alta + pago. NO crea la cuenta: guarda un alta pendiente y crea la suscripción en Mercado Pago.
+   * La cuenta se crea en el webhook cuando el primer pago queda aprobado. Exige el email verificado.
+   */
   app.post(
-    "/api/signup",
-    rateLimit("signup", 10, 60_000),
+    "/api/checkout",
+    rateLimit("checkout", 10, 60_000),
     ah(async (req, res) => {
       const b = body(req);
       const name = str(b.name).trim().slice(0, 80);
       const email = emailVerification.normalizeEmail(str(b.email));
       const password = str(b.password);
+      const planId = str(b.plan_id) || "unico";
 
       if (name.length < 2) throw new HttpError(400, "Ingresá tu nombre.");
       if (email.length > 254 || !emailVerification.EMAIL_RE.test(email)) throw new HttpError(400, "El email no es válido.");
       if (password.length < 8 || password.length > 72) {
         throw new HttpError(400, "La contraseña debe tener entre 8 y 72 caracteres.");
       }
-
-      const proofId = await emailVerification.checkProof(email, str(b.verification_token));
-
-      const { error } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true, // ya lo verificamos nosotros con el código; Supabase no manda su propio mail
-        user_metadata: { name },
-      });
-      if (error) {
-        if (error.code === "email_exists" || /already (been )?registered|already exists/i.test(error.message)) {
-          throw new HttpError(409, "Ya existe una cuenta con ese email. Iniciá sesión.");
-        }
-        if (error.code === "weak_password") throw new HttpError(400, "Esa contraseña es muy débil. Probá con otra.");
-        console.error("No se pudo crear el usuario", error);
-        throw new HttpError(400, "No pudimos crear la cuenta. Probá de nuevo.");
+      if (!billing.PLANS[planId]) throw new HttpError(400, "Elegí un plan.");
+      if (b.accept_terms !== true) {
+        throw new HttpError(400, "Tenés que aceptar el cobro recurrente para suscribirte.");
       }
 
-      await emailVerification.consumeProof(proofId);
-      res.status(201).json({ ok: true });
+      const proofId = await emailVerification.checkProof(email, str(b.verification_token));
+      const card = parseCard(b.card);
+
+      const signupId = await billing.startSignupCheckout({
+        name,
+        email,
+        password,
+        planId,
+        proofId,
+        card,
+        ip: req.ip ?? null,
+        userAgent: str(req.headers["user-agent"]).slice(0, 300) || null,
+      });
+      res.status(202).json({ ok: true, signup_id: signupId });
+    }),
+  );
+
+  /** El formulario consulta esto hasta que el webhook apruebe (o rechace) el pago. */
+  app.get(
+    "/api/checkout/:id/status",
+    rateLimit("checkout-status", 90, 60_000),
+    ah(async (req, res) => {
+      res.json(await billing.signupStatus(String(req.params.id)));
     }),
   );
 

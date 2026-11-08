@@ -1,6 +1,8 @@
+import crypto from "node:crypto";
 import { config } from "./config.js";
 import { supabaseAdmin } from "./supabase.js";
 import { HttpError } from "./errors.js";
+import * as emailVerification from "./emailVerification.js";
 import { sendOnce, templates } from "./mailer.js";
 import { MercadoPagoClient, MercadoPagoError } from "./mercadopago.js";
 import type { AuthorizedPayment, Payment } from "./mercadopago.js";
@@ -335,9 +337,18 @@ async function findSubscription(preapprovalId?: string, externalRef?: string): P
 
 export async function syncAuthorizedPayment(authorizedPaymentId: string): Promise<string> {
   const ap = await mp.getAuthorizedPayment(authorizedPaymentId);
-  const sub = await findSubscription(ap.preapproval_id, ap.external_reference);
-  if (!sub) return "ignored";
   const outcome = classify(ap);
+
+  let sub = await findSubscription(ap.preapproval_id, ap.external_reference);
+  if (!sub) {
+    // Alta nueva: todavía no existe la cuenta. Solo se crea si el pago quedó aprobado.
+    const signup = await findSignup(ap.preapproval_id, ap.external_reference);
+    if (!signup) return "ignored";
+    if (outcome === "pending") return "pending";
+    if (outcome === "failed") return failSignup(signup, failureReason(ap.payment?.status_detail));
+    sub = await approveSignup(signup);
+    if (!sub) return "signup_in_progress";
+  }
   if (outcome === "pending") return "pending";
 
   let detail: Payment | null = null;
@@ -438,6 +449,8 @@ export async function runMaintenance(): Promise<{ graceExpired: number; periodEn
   const t = now();
   let graceExpired = 0;
   let periodEnded = 0;
+
+  await purgeStaleSignups().catch((e) => console.error("purgeStaleSignups", e));
 
   const { data: overdue } = await supabaseAdmin
     .from("subscriptions")
@@ -582,4 +595,299 @@ export async function customersList() {
     .order("created_at", { ascending: false })
     .limit(500);
   return data ?? [];
+}
+
+// ============================================================================
+// Alta de cuenta al aprobarse el pago
+//
+// Flujo: el formulario manda nombre/email/contraseña/tarjeta a /api/checkout. NO se crea ninguna cuenta:
+// se guarda un "alta pendiente" (la contraseña va cifrada) y se crea la suscripción en Mercado Pago.
+// Cuando llega el webhook con el primer pago APROBADO, recién ahí se crea el usuario en Supabase.
+// ============================================================================
+const SIGNUP_REF_PREFIX = "rexplay-signup-";
+const SIGNUP_CLAIM_TTL_MS = 2 * 60_000;
+const SIGNUP_EXPIRES_HOURS = 24;
+
+export interface PendingSignup {
+  id: string;
+  email: string;
+  name: string;
+  password_enc: string | null;
+  plan_id: string;
+  proof_id: number | null;
+  doc_type: string | null;
+  doc_number: string | null;
+  payment_method_id: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  status: "pending" | "processing" | "approved" | "failed";
+  failure_reason: string | null;
+  processor_subscription_id: string | null;
+  user_id: string | null;
+  created_at: string;
+}
+
+function signupKey(): Buffer {
+  const secret = config.signupKey || (config.isProd ? "" : "rexplay-dev-only-signup-key");
+  if (!secret) throw new HttpError(500, "Falta PENDING_SIGNUP_KEY en el backend.");
+  return crypto.createHash("sha256").update(secret).digest();
+}
+
+function encryptSecret(plain: string): string {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv("aes-256-gcm", signupKey(), iv);
+  const enc = Buffer.concat([c.update(plain, "utf8"), c.final()]);
+  return [iv, c.getAuthTag(), enc].map((b) => b.toString("base64")).join(".");
+}
+
+function decryptSecret(blob: string): string {
+  const [iv, tag, enc] = blob.split(".").map((p) => Buffer.from(p, "base64"));
+  const d = crypto.createDecipheriv("aes-256-gcm", signupKey(), iv);
+  d.setAuthTag(tag);
+  return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
+}
+
+export interface SignupCheckoutInput {
+  name: string;
+  email: string; // ya normalizado
+  password: string;
+  planId: string;
+  proofId: number;
+  card: CardInput & { identification?: { type: string; number: string } };
+  ip: string | null;
+  userAgent: string | null;
+}
+
+/** Crea el alta pendiente y la suscripción en Mercado Pago. Devuelve el id del alta (para consultar el estado). */
+export async function startSignupCheckout(i: SignupCheckoutInput): Promise<string> {
+  const plan = PLANS[i.planId];
+  if (!plan) throw new HttpError(400, "Elegí un plan.");
+
+  const { data: taken, error: takenErr } = await supabaseAdmin.rpc("email_taken", { p_email: i.email });
+  if (takenErr) {
+    console.error("email_taken", takenErr);
+    throw new HttpError(500, "No pudimos validar el email. Probá de nuevo.");
+  }
+  if (taken === true) throw new HttpError(409, "Ya existe una cuenta con ese email. Iniciá sesión.");
+
+  const since = new Date(Date.now() - 30 * 60_000).toISOString();
+  const { data: open } = await supabaseAdmin
+    .from("pending_signups")
+    .select("id")
+    .eq("email", i.email)
+    .in("status", ["pending", "processing"])
+    .gte("created_at", since)
+    .limit(1);
+  if (open?.length) throw new HttpError(409, "Ya estamos procesando un pago con ese email. Esperá unos minutos.");
+
+  const { data: row, error } = await supabaseAdmin
+    .from("pending_signups")
+    .insert({
+      email: i.email,
+      name: i.name,
+      password_enc: encryptSecret(i.password),
+      plan_id: plan.id,
+      proof_id: i.proofId,
+      doc_type: i.card.identification?.type ?? null,
+      doc_number: i.card.identification?.number ?? null,
+      payment_method_id: i.card.payment_method_id ?? null,
+      ip: i.ip,
+      user_agent: i.userAgent,
+    })
+    .select("id")
+    .single();
+  if (error || !row) {
+    console.error("pending_signups insert", error);
+    throw new HttpError(500, "No se pudo iniciar el pago.");
+  }
+
+  try {
+    const pre = await mp.createSubscription({
+      reason: `${plan.name} - suscripción cada ${plan.period_days} días`,
+      externalReference: SIGNUP_REF_PREFIX + row.id,
+      payerEmail: i.email,
+      cardTokenId: i.card.token,
+      amountCents: plan.price,
+      frequencyDays: plan.period_days,
+      backUrl: `${config.appUrl}/cuenta`,
+    });
+    if (pre.status !== "authorized") {
+      throw new MercadoPagoError(402, `La suscripción quedó en estado "${pre.status}".`, pre);
+    }
+    await supabaseAdmin
+      .from("pending_signups")
+      .update({ processor_subscription_id: pre.id, payment_method_id: pre.payment_method_id ?? i.card.payment_method_id ?? null })
+      .eq("id", row.id);
+  } catch (e) {
+    await supabaseAdmin.from("pending_signups").delete().eq("id", row.id);
+    throw friendlyMpError(e);
+  }
+  return row.id as string;
+}
+
+async function findSignup(preapprovalId?: string, externalRef?: string): Promise<PendingSignup | undefined> {
+  let ref = externalRef;
+  if (!ref?.startsWith(SIGNUP_REF_PREFIX) && preapprovalId) {
+    const { data } = await supabaseAdmin
+      .from("pending_signups")
+      .select("*")
+      .eq("processor_subscription_id", preapprovalId)
+      .maybeSingle();
+    if (data) return data as PendingSignup;
+    // El webhook pudo llegar antes de que guardáramos el id de la suscripción: se lo preguntamos a MP.
+    const pre = await mp.getSubscription(preapprovalId).catch(() => null);
+    ref = pre?.external_reference;
+  }
+  if (!ref?.startsWith(SIGNUP_REF_PREFIX)) return undefined;
+  const { data } = await supabaseAdmin
+    .from("pending_signups")
+    .select("*")
+    .eq("id", ref.slice(SIGNUP_REF_PREFIX.length))
+    .maybeSingle();
+  return (data as PendingSignup | null) ?? undefined;
+}
+
+/** Marca el alta como fallida, borra la contraseña guardada y corta la suscripción en MP para que no siga cobrando. */
+async function failSignup(s: PendingSignup, reason: string): Promise<string> {
+  if (s.status === "approved") return "ignored";
+  await supabaseAdmin
+    .from("pending_signups")
+    .update({ status: "failed", failure_reason: reason, password_enc: null, completed_at: fmt(now()) })
+    .eq("id", s.id);
+  if (s.processor_subscription_id) {
+    await cancelAtProcessor(s.processor_subscription_id).catch((e) =>
+      console.error("No se pudo cancelar en MP", s.processor_subscription_id, e),
+    );
+  }
+  return "signup_failed";
+}
+
+/**
+ * Pago aprobado: crea el usuario y su suscripción. Es idempotente y seguro ante webhooks simultáneos
+ * (un solo proceso "reclama" el alta). Devuelve la suscripción, o undefined si otro proceso la está creando.
+ */
+async function approveSignup(s: PendingSignup): Promise<SubscriptionRow | undefined> {
+  const ref = SIGNUP_REF_PREFIX + s.id;
+
+  if (s.status === "approved") {
+    const { data } = await supabaseAdmin.from("subscriptions").select("*").eq("external_reference", ref).maybeSingle();
+    return (data as SubscriptionRow | null) ?? undefined;
+  }
+  if (s.status === "failed") return undefined;
+
+  // Reclamo atómico: solo uno pasa de "pending" a "processing" (o retoma uno trabado hace más de 2 minutos)
+  const stale = new Date(Date.now() - SIGNUP_CLAIM_TTL_MS).toISOString();
+  const { data: claimed } = await supabaseAdmin
+    .from("pending_signups")
+    .update({ status: "processing", claimed_at: fmt(now()) })
+    .eq("id", s.id)
+    .or(`status.eq.pending,and(status.eq.processing,claimed_at.lt.${stale})`)
+    .select("*")
+    .maybeSingle();
+  if (!claimed) return undefined;
+  const c = claimed as PendingSignup;
+
+  try {
+    let userId = c.user_id;
+    if (!userId) {
+      if (!c.password_enc) throw new Error("alta sin contraseña guardada");
+      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+        email: c.email,
+        password: decryptSecret(c.password_enc),
+        email_confirm: true, // el email ya se verificó con el código de 6 dígitos
+        user_metadata: { name: c.name },
+      });
+      if (error || !data.user) throw error ?? new Error("createUser sin usuario");
+      userId = data.user.id;
+      await supabaseAdmin.from("pending_signups").update({ user_id: userId }).eq("id", c.id);
+    }
+
+    const plan = PLANS[c.plan_id] ?? PLANS.unico;
+    let { data: sub } = await supabaseAdmin.from("subscriptions").select("*").eq("external_reference", ref).maybeSingle();
+    if (!sub) {
+      const ins = await supabaseAdmin
+        .from("subscriptions")
+        .insert({
+          user_id: userId,
+          plan_id: plan.id,
+          status: "pending",
+          processor_subscription_id: c.processor_subscription_id,
+          external_reference: ref,
+          card_brand: brandName(c.payment_method_id ?? undefined),
+        })
+        .select("*")
+        .single();
+      if (ins.error || !ins.data) throw ins.error ?? new Error("no se pudo crear la suscripción");
+      sub = ins.data;
+
+      // Registro del consentimiento (igual que en la re-suscripción)
+      const nowIso = new Date().toISOString();
+      await supabaseAdmin.from("signup_responses").insert({
+        user_id: userId,
+        submitted_at: c.created_at,
+        plan_id: plan.id,
+        price_cents: plan.price,
+        period_days: plan.period_days,
+        accepted_terms_at: c.created_at,
+        ip: c.ip,
+        user_agent: c.user_agent,
+        answers_json: {
+          name: c.name,
+          email: c.email,
+          doc_type: c.doc_type,
+          doc_number: c.doc_number,
+          plan_id: plan.id,
+          payment_method_id: c.payment_method_id,
+          kind: "signup",
+          accepted_terms: true,
+          approved_at: nowIso,
+        },
+      });
+    }
+
+    await supabaseAdmin
+      .from("pending_signups")
+      .update({ status: "approved", password_enc: null, completed_at: fmt(now()) })
+      .eq("id", c.id);
+    if (c.proof_id) await emailVerification.consumeProof(c.proof_id).catch(() => undefined);
+    return sub as SubscriptionRow;
+  } catch (e) {
+    // Si falló la creación de la cuenta con el pago ya aprobado, hay que revisarlo a mano (y/o devolver el dinero).
+    console.error(`[ALTA] Pago aprobado pero no se pudo crear la cuenta (alta ${c.id}, ${c.email}):`, e);
+    await failSignup({ ...c, status: "processing" }, "no_se_pudo_crear_cuenta");
+    return undefined;
+  }
+}
+
+const SIGNUP_FAILURE_MESSAGES: Record<string, string> = {
+  fondos_insuficientes: "La tarjeta no tiene fondos suficientes.",
+  tarjeta_invalida: "Los datos de la tarjeta no son válidos.",
+  requiere_autorizacion: "Tu banco necesita autorizar el pago. Comunicate con ellos o probá con otra tarjeta.",
+  tarjeta_bloqueada: "La tarjeta está bloqueada o no admite este pago.",
+  limite_de_intentos: "Se superó el límite de intentos con esta tarjeta.",
+  no_se_pudo_crear_cuenta: "Recibimos el pago pero no pudimos crear la cuenta. Escribinos y lo resolvemos.",
+  expirado: "No recibimos la confirmación del pago a tiempo. Probá de nuevo.",
+};
+
+/** Estado del alta, para que el formulario espere la aprobación del pago. */
+export async function signupStatus(id: string): Promise<{ status: "pending" | "approved" | "failed"; message?: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(404, "Alta no encontrada.");
+  const { data } = await supabaseAdmin.from("pending_signups").select("status, failure_reason").eq("id", id).maybeSingle();
+  if (!data) throw new HttpError(404, "Alta no encontrada.");
+  if (data.status === "approved") return { status: "approved" };
+  if (data.status === "failed") {
+    return { status: "failed", message: SIGNUP_FAILURE_MESSAGES[data.failure_reason ?? ""] ?? "El pago fue rechazado. Probá con otra tarjeta." };
+  }
+  return { status: "pending" };
+}
+
+/** Altas que nunca recibieron la aprobación: se cortan y se borra la contraseña guardada. */
+export async function purgeStaleSignups(): Promise<void> {
+  const cutoff = new Date(Date.now() - SIGNUP_EXPIRES_HOURS * 3_600_000).toISOString();
+  const { data } = await supabaseAdmin
+    .from("pending_signups")
+    .select("*")
+    .in("status", ["pending", "processing"])
+    .lt("created_at", cutoff);
+  for (const s of (data as PendingSignup[] | null) ?? []) await failSignup(s, "expirado");
 }

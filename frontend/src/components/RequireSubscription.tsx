@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/auth";
 import { api, getActiveProfileId, type Me } from "../lib/api";
+import { useSplashHold } from "./splashHold";
 
 export default function RequireSubscription({
   children,
@@ -29,6 +30,8 @@ export default function RequireSubscription({
     .catch(() => setMe(null))
     .finally(() => setLoading(false));
 }, [user, authLoading, me]);
+
+  useSplashHold(authLoading || loading);
 
   if (authLoading || loading) return <div className="bill-center">Cargando…</div>;
   if (!user) return <Navigate to="/ingresar" replace />;

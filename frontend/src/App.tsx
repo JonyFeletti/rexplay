@@ -12,6 +12,7 @@ import Perfiles from "./pages/Perfiles";
 import ContinuarViendo from "./components/ContinuarViendo";
 import ProfileChip from "./components/ProfileChip";
 import Vivo from "./pages/Vivo";
+import Splash from "./components/Splash";
 
 type Canal = {
   nombre: string;
@@ -128,6 +129,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Splash>
         <Routes>
           <Route path="/" element={<RequireSubscription><Inicio /></RequireSubscription>} />
           <Route path="/peliculas" element={<RequireSubscription><Peliculas /></RequireSubscription>} />
@@ -139,6 +141,7 @@ function App() {
           <Route path="/perfiles" element={<RequireSubscription needProfile={false}><Perfiles /></RequireSubscription>} />
           <Route path="/vivo" element={<RequireSubscription><Vivo /></RequireSubscription>} />
         </Routes>
+        </Splash>
       </AuthProvider>
     </BrowserRouter>
   );

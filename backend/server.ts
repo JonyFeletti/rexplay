@@ -9,6 +9,7 @@ import "./providers/cinecalidad.js";
 import "./providers/playlatin.js";
 import "./providers/tonplayer.js";
 import "./providers/embos.js";
+import { registerEpgRoutes } from "./epg.js";
 
 // Rutas de suscripciones, perfiles, progreso y webhook MP
 import { registerSubscriptionRoutes, errorHandler } from "./app.js";
@@ -89,6 +90,7 @@ app.post("/api/reproductores", async (req, res) => {
 //
 // El webhook de MP tiene su propio express.raw() dentro de app.ts.
 registerSubscriptionRoutes(app);
+registerEpgRoutes(app);
 
 // -------------------- ERRORES --------------------
 app.use(errorHandler);

@@ -3,7 +3,6 @@ import {
   ExpirationDate,
   SecurityCode,
   createCardToken,
-  getIdentificationTypes,
   getPaymentMethods,
   initMercadoPago,
 } from "@mercadopago/sdk-react";
@@ -22,9 +21,12 @@ import { api, type CardData } from "../lib/api";
 export type CardFieldsHandle = { tokenize: () => Promise<CardData> };
 
 type FieldKey = "number" | "expiry" | "cvv";
-type IdType = { id: string; name: string; min_length: number; max_length: number };
+type Brand = { name: string; thumbnail: string };
 
-const FALLBACK_ID_TYPES: IdType[] = [{ id: "DNI", name: "DNI", min_length: 7, max_length: 8 }];
+// El único documento admitido es DNI (7 u 8 dígitos).
+const ID_TYPE = "DNI";
+const DNI_MIN = 7;
+const DNI_MAX = 8;
 
 const FIELD_ERRORS: Record<FieldKey, string> = {
   number: "Revisá el número de la tarjeta.",
@@ -57,9 +59,8 @@ export default function CardFields({
   const [stalled, setStalled] = useState(false);
 
   const [holder, setHolder] = useState("");
-  const [idTypes, setIdTypes] = useState<IdType[]>(FALLBACK_ID_TYPES);
-  const [idType, setIdType] = useState(FALLBACK_ID_TYPES[0].id);
   const [idNumber, setIdNumber] = useState("");
+  const [brand, setBrand] = useState<Brand | null>(null);
 
   const [touched, setTouched] = useState<Record<FieldKey, boolean>>({ number: false, expiry: false, cvv: false });
   const [invalid, setInvalid] = useState<Record<FieldKey, boolean>>({ number: true, expiry: true, cvv: true });
@@ -85,20 +86,6 @@ export default function CardFields({
       })
       .catch((e: Error) => setLoadError(e.message));
   }, []);
-
-  // --- Tipos de documento (DNI, CUIL, etc.) ---
-  useEffect(() => {
-    if (!ready) return;
-    getIdentificationTypes()
-      .then((types) => {
-        if (!types?.length) return;
-        setIdTypes(types);
-        setIdType((cur) => (types.some((t) => t.id === cur) ? cur : types[0].id));
-      })
-      .catch(() => {
-        /* nos quedamos con DNI */
-      });
-  }, [ready]);
 
   // Avisar cuando los 3 iframes terminaron de cargar.
   useEffect(() => {
@@ -126,14 +113,21 @@ export default function CardFields({
         onBinChange: ({ bin }: { bin?: string }) => {
           if (!bin) {
             paymentMethodRef.current = undefined;
+            setBrand(null);
             return;
           }
           getPaymentMethods({ bin })
             .then((r) => {
-              paymentMethodRef.current = r?.results?.[0]?.id;
+              const m = r?.results?.[0] as
+                | { id?: string; name?: string; secure_thumbnail?: string; thumbnail?: string }
+                | undefined;
+              paymentMethodRef.current = m?.id;
+              const thumbnail = m?.secure_thumbnail || m?.thumbnail;
+              setBrand(m && thumbnail ? { name: m.name || m.id || "Tarjeta", thumbnail } : null);
             })
             .catch(() => {
               paymentMethodRef.current = undefined;
+              setBrand(null);
             });
         },
       },
@@ -141,8 +135,6 @@ export default function CardFields({
       cvv: forField("cvv"),
     };
   }, []);
-
-  const currentIdType = idTypes.find((t) => t.id === idType) ?? idTypes[0];
 
   useImperativeHandle(
     ref,
@@ -152,9 +144,7 @@ export default function CardFields({
 
         if (holder.trim().length < 2) throw new Error("Ingresá el nombre del titular tal como figura en la tarjeta.");
         const doc = idNumber.replace(/\D/g, "");
-        const min = currentIdType?.min_length ?? 7;
-        const max = currentIdType?.max_length ?? 11;
-        if (doc.length < min || doc.length > max) throw new Error(`Ingresá un número de ${currentIdType?.name ?? "documento"} válido.`);
+        if (doc.length < DNI_MIN || doc.length > DNI_MAX) throw new Error("Ingresá un número de DNI válido.");
         if (invalid.number) throw new Error(FIELD_ERRORS.number);
         if (invalid.expiry) throw new Error(FIELD_ERRORS.expiry);
         if (invalid.cvv) throw new Error(FIELD_ERRORS.cvv);
@@ -163,7 +153,7 @@ export default function CardFields({
         try {
           token = await createCardToken({
             cardholderName: holder.trim(),
-            identificationType: currentIdType?.id ?? idType,
+            identificationType: ID_TYPE,
             identificationNumber: doc,
           });
         } catch (e) {
@@ -175,17 +165,14 @@ export default function CardFields({
         return {
           token: token.id,
           payment_method_id: paymentMethodRef.current,
-          identification: { type: currentIdType?.id ?? idType, number: doc },
+          identification: { type: ID_TYPE, number: doc },
         };
       },
     }),
-    [holder, idNumber, idType, currentIdType, invalid],
+    [holder, idNumber, invalid],
   );
 
-  const onIdNumber = useCallback(
-    (v: string) => setIdNumber(v.replace(/\D/g, "").slice(0, currentIdType?.max_length ?? 11)),
-    [currentIdType],
-  );
+  const onIdNumber = useCallback((v: string) => setIdNumber(v.replace(/\D/g, "").slice(0, DNI_MAX)), []);
 
   if (loadError) return <p className="bill-error">{loadError}</p>;
   if (!ready) return <p className="bill-muted">Cargando formulario de pago…</p>;
@@ -204,6 +191,15 @@ export default function CardFields({
         <span className="cf-label">Número de tarjeta</span>
         <div className={`cf-secure${showErr("number") ? " cf-invalid" : ""}`}>
           <CardNumber placeholder="1234 1234 1234 1234" style={FIELD_STYLE} {...handlers.number} />
+          {brand && (
+            <img
+              className="cf-brand"
+              src={brand.thumbnail}
+              alt={brand.name}
+              title={brand.name}
+              onError={(e) => (e.currentTarget.style.display = "none")}
+            />
+          )}
         </div>
         {showErr("number") && <span className="cf-error">{FIELD_ERRORS.number}</span>}
       </div>
@@ -211,6 +207,7 @@ export default function CardFields({
       <label className="cf-field">
         <span className="cf-label">Nombre del titular</span>
         <input
+          className="cf-input"
           value={holder}
           autoComplete="cc-name"
           placeholder="Como figura en la tarjeta"
@@ -235,28 +232,17 @@ export default function CardFields({
         </div>
       </div>
 
-      <div className="cf-row cf-row-doc">
-        <label className="cf-field">
-          <span className="cf-label">Documento</span>
-          <select value={idType} onChange={(e) => setIdType(e.target.value)}>
-            {idTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="cf-field">
-          <span className="cf-label">Número del titular</span>
-          <input
-            value={idNumber}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="Sin puntos"
-            onChange={(e) => onIdNumber(e.target.value)}
-          />
-        </label>
-      </div>
+      <label className="cf-field">
+        <span className="cf-label">DNI del titular</span>
+        <input
+          className="cf-input"
+          value={idNumber}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="Sin puntos"
+          onChange={(e) => onIdNumber(e.target.value)}
+        />
+      </label>
     </div>
   );
 }

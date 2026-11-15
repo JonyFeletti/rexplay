@@ -902,3 +902,279 @@ body {
   height: 8px;
   background: #00d2ff;
 }
+/* =========================
+   GUÍA EPG Y PROGRAMA ACTUAL
+========================= */
+
+/* --- Info del programa actual en la barra superior (al lado) --- */
+.live-channel-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.live-channel-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.live-channel-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.live-channel-details h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.live-channel-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Tarjeta del programa actual (al lado de los chips) */
+.epg-current-program {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border-left: 2px solid #00d2ff;
+  transition: background 0.2s;
+}
+
+.epg-current-program:hover {
+  background: rgba(0, 210, 255, 0.15);
+}
+
+.epg-current-program strong {
+  color: #fff;
+  font-size: 12px;
+}
+
+.epg-current-program span {
+  font-size: 11px;
+  color: #b4b8c6;
+}
+
+/* --- Menú flotante de la Guía (Tamaño fijo) --- */
+.epg-container {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 800px;
+  height: 180px; /* Altura fija para que no se deforme */
+  background: rgba(10, 12, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  backdrop-filter: blur(16px);
+  z-index: 150;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+/* Cabecera: Botones a la izquierda, nombre al costado, cruz a la derecha */
+.epg-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.epg-nav-channels {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.epg-nav-channels button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.epg-nav-channels button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.epg-canal-nombre {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+.epg-close-btn {
+  background: transparent;
+  border: 0;
+  color: #aaa;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+.epg-close-btn:hover {
+  color: #fff;
+}
+
+/* Contenido con scroll horizontal */
+.epg-content {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+
+.epg-content::-webkit-scrollbar {
+  height: 6px;
+}
+.epg-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.epg-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: #b4b8c6;
+  font-size: 13px;
+}
+
+/* Contenedor de las tarjetas */
+.epg-timeline {
+  display: flex;
+  align-items: stretch; /* Todas las tarjetas de la misma altura */
+  gap: 2px; /* Separación mínima entre programas */
+  height: 100%;
+}
+
+/* Tarjetas con ancho dinámico (el JS calcula el width) */
+.epg-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  box-sizing: border-box;
+  flex-shrink: 0; /* Evita que se aplasten */
+  overflow: hidden;
+  transition: background 0.2s;
+}
+
+.epg-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.epg-item.actual {
+  border-color: #00d2ff;
+  background: rgba(0, 210, 255, 0.1);
+  box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+}
+
+.epg-time {
+  font-size: 10px;
+  color: #00d2ff;
+  font-weight: 700;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.epg-item.actual .epg-time {
+  color: #fff;
+}
+
+.epg-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.epg-progress-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  margin-top: auto;
+  overflow: hidden;
+}
+
+.epg-progress-fill {
+  height: 100%;
+  background: #00d2ff;
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  .epg-container {
+    width: 95%;
+    bottom: 20px;
+    height: 160px;
+  }
+  .live-channel-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Overlay de números dentro de la guía EPG */
+.epg-typed-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+
+.epg-typed-overlay span {
+  font-size: 64px;
+  font-weight: 900;
+  color: #00d2ff;
+  text-shadow: 0 0 20px rgba(0, 210, 255, 0.6);
+  letter-spacing: 0.1em;
+}

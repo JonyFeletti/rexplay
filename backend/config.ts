@@ -25,6 +25,9 @@ export const config = {
   },
 
   adminToken: env.ADMIN_TOKEN ?? "",
+
+  /** Clave para cifrar (AES-256-GCM) la contraseña mientras el pago está pendiente. Generala con: openssl rand -base64 32 */
+  signupKey: env.PENDING_SIGNUP_KEY ?? "",
 };
 
 export function assertProductionConfig(): void {
@@ -35,6 +38,7 @@ export function assertProductionConfig(): void {
   if (!config.mp.accessToken) missing.push("MP_ACCESS_TOKEN");
   if (!config.mp.publicKey) missing.push("MP_PUBLIC_KEY");
   if (!config.mp.webhookSecret) missing.push("MP_WEBHOOK_SECRET");
+  if (!config.signupKey) missing.push("PENDING_SIGNUP_KEY");
   if (!config.mail.smtpUrl) missing.push("SMTP_URL");
   if (!env.APP_URL) missing.push("APP_URL");
   if (missing.length) {

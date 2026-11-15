@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import express, { NextFunction, Request, RequestHandler, Response } from "express";
 import * as billing from "./billing.js";
+import * as emailVerification from "./emailVerification.js";
 import { config } from "./config.js";
 import { HttpError } from "./errors.js";
 import { verifyWebhookSignature } from "./mercadopago.js";
@@ -147,6 +148,76 @@ export function registerSubscriptionRoutes(app: express.Express): void {
   app.get("/api/config", (_req, res) => {
     res.json({ mp_public_key: config.mp.publicKey });
   });
+
+  // ---------- Alta de cuenta con verificación de email (código de 6 dígitos) ----------
+  app.post(
+    "/api/email-verification/send",
+    rateLimit("verif-send", 8, 60_000),
+    ah(async (req, res) => {
+      const { resendInSeconds } = await emailVerification.sendCode(str(body(req).email));
+      res.json({ ok: true, resend_in: resendInSeconds });
+    }),
+  );
+
+  app.post(
+    "/api/email-verification/verify",
+    rateLimit("verif-check", 20, 60_000),
+    ah(async (req, res) => {
+      const b = body(req);
+      const token = await emailVerification.verifyCode(str(b.email), str(b.code));
+      res.json({ ok: true, verification_token: token });
+    }),
+  );
+
+  /**
+   * Alta + pago. NO crea la cuenta: guarda un alta pendiente y crea la suscripción en Mercado Pago.
+   * La cuenta se crea en el webhook cuando el primer pago queda aprobado. Exige el email verificado.
+   */
+  app.post(
+    "/api/checkout",
+    rateLimit("checkout", 10, 60_000),
+    ah(async (req, res) => {
+      const b = body(req);
+      const name = str(b.name).trim().slice(0, 80);
+      const email = emailVerification.normalizeEmail(str(b.email));
+      const password = str(b.password);
+      const planId = str(b.plan_id) || "unico";
+
+      if (name.length < 2) throw new HttpError(400, "Ingresá tu nombre.");
+      if (email.length > 254 || !emailVerification.EMAIL_RE.test(email)) throw new HttpError(400, "El email no es válido.");
+      if (password.length < 8 || password.length > 72) {
+        throw new HttpError(400, "La contraseña debe tener entre 8 y 72 caracteres.");
+      }
+      if (!billing.PLANS[planId]) throw new HttpError(400, "Elegí un plan.");
+      if (b.accept_terms !== true) {
+        throw new HttpError(400, "Tenés que aceptar el cobro recurrente para suscribirte.");
+      }
+
+      const proofId = await emailVerification.checkProof(email, str(b.verification_token));
+      const card = parseCard(b.card);
+
+      const signupId = await billing.startSignupCheckout({
+        name,
+        email,
+        password,
+        planId,
+        proofId,
+        card,
+        ip: req.ip ?? null,
+        userAgent: str(req.headers["user-agent"]).slice(0, 300) || null,
+      });
+      res.status(202).json({ ok: true, signup_id: signupId });
+    }),
+  );
+
+  /** El formulario consulta esto hasta que el webhook apruebe (o rechace) el pago. */
+  app.get(
+    "/api/checkout/:id/status",
+    rateLimit("checkout-status", 90, 60_000),
+    ah(async (req, res) => {
+      res.json(await billing.signupStatus(String(req.params.id)));
+    }),
+  );
 
   /** "Me": devuelve perfil, suscripción y pagos del usuario autenticado. */
   app.get(

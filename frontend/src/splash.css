@@ -34,6 +34,15 @@
   animation: splash-logo-in 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Pantallas más anchas que 16:9: el logo llena todo el ancho, sin barras negras a los costados */
+@media (min-aspect-ratio: 16/9) and (max-aspect-ratio: 5/2) {
+  .splash-logo {
+    object-fit: cover;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
 /* Ruedita de carga, esquina inferior izquierda */
 .splash-spinner {
   --size: 40px;
